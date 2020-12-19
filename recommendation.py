@@ -6,10 +6,10 @@ from collections import defaultdict
 
 
 class Recommendation:
-    def __init__(self, recommendation_file_path: str = ""):
+    def __init__(self, recommendation_file_path: str):
         self.recommendation: \
             tp.Dict[str, tp.List[tp.Optional[str, float]]] = defaultdict(list)
-        self._recommendation_file_path: str = recommendation_file_path or "recommends.csv"
+        self._recommendation_file_path: str = recommendation_file_path
         self._load_recommendation_from_file()
 
     def _load_recommendation_from_file(self) -> None:
@@ -23,6 +23,29 @@ class Recommendation:
                 self.recommendation[product_code].append(
                     (recommended_product, float(recommended_level))
                 )
+        self._sort_recommendation_value_by_accuracy()
+
+    def _sort_recommendation_value_by_accuracy(self) -> None:
+        for key, values in self.recommendation.items():
+            self.recommendation[key] = sorted(values, key=lambda elem: elem[1])
+
+    @staticmethod
+    def _search_lower_bound_index(values: tp.List[tp.Tuple[str, float]],
+                                  accuracy: float) -> int:
+        if values[0][1] >= accuracy:
+            return 0
+
+        left, mid, right = 0, len(values) // 2, len(values) - 1
+
+        while values[mid][1] != accuracy and left < right:
+            if accuracy > values[mid][1]:
+                left = mid + 1
+            else:
+                right = mid - 1
+            mid = (left + right) // 2
+        while values[mid - 1][1] == accuracy:
+            mid -= 1
+        return mid
 
     def get_recommendation_for_product(self,
                                        sku: str,
@@ -30,8 +53,6 @@ class Recommendation:
         if sku not in self.recommendation:
             return []
 
-        result = []
-        for recommended_sku, accuracy in self.recommendation[sku]:
-            if accuracy >= minimal_accuracy_level:
-                result.append(recommended_sku)
-        return result
+        recommends_for_sku = self.recommendation[sku]
+        index = self._search_lower_bound_index(recommends_for_sku, minimal_accuracy_level)
+        return [recommended_product[0] for recommended_product in recommends_for_sku[index:]]
